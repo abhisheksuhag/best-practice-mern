@@ -1,215 +1,213 @@
 ---
-name: mern
-description: A strict 2026 MERN stack engineering playbook with comprehensive code examples for React, Node, Express, and MongoDB.
+name: mern-stack
+description: "Use this skill when building, reviewing, or architecting MERN stack applications (MongoDB, Express, React, Node.js). Triggers include: questions about React component patterns, state management, data fetching, TypeScript setup, Express API design, Mongoose schema design, folder structure, auth patterns, performance, or any combination of these. Covers pragmatic production standards — what to use, what to skip, and why — across the full stack."
+version: "2026"
 ---
 
-# MERN ENGINEERING PLAYBOOK 
+# MERN Engineering Playbook 2026
 
-Modern Best Practices for Scalability, Maintainability & Performance.
-Basically: "If someone joins my startup tomorrow — this is how we write React, Node, Express, Mongo in 2026 so that the codebase doesn't become a nightmare in 12 months." Not theory. Not tutorials. Just: what to do / what not to do in production-grade MERN apps.
+Pragmatic standards for scalable, maintainable production apps. What to do, what to skip, and why — with honest tradeoffs included.
 
 ---
 
-## 🟦 PART 1 — REACT (CLIENT ARCHITECTURE)
+## PART 1 — REACT
 
-This section answers: How should we write React apps in 2026 so they remain scalable after 50+ features?
+### Component Philosophy
 
-### 1. Component Philosophy
+**Do:**
+- Functional components only
+- Custom hooks for reusable logic (`useUser`, `useCart`, `useFilters`)
+- React Hook Form for all forms
+- Single responsibility per component
 
-✅ **Use:**
+**Avoid:**
+- Class components
+- "God components" — one component fetching, filtering, sorting, validating, and rendering. Split it.
+- Prop drilling past 2 levels — use query cache or context
+- API calls inside component files
 
-- Functional Components only
-- Composition over inheritance
-- Custom Hooks for logic reuse
-- Controlled components for forms
-- Presentational vs Container separation
-- Headless UI approach (logic separated from UI)
+---
 
-```javascript
-// Example:
-const useCategories = () => {
-  return useQuery(categoryQueryKeys.list(), fetchCategories)
-}
+### Folder Structure
 
-// UI stays clean:
-const CategoryList = () => {
-  const { data } = useCategories()
-}
+**Type-based** (works well up to ~50 features, small team):
+```
+src/
+  components/    ← shared/reusable UI
+  pages/         ← route-level pages
+  hooks/         ← custom hooks
+  utils/         ← helpers (cn, formatDate)
+  types/         ← shared TypeScript types
+  config/        ← constants, axios instance
 ```
 
-❌ **Avoid:**
-
-- Class Components
-- Large "God Components" (Massive 400-line components)
-- Prop Drilling → use Context/Zustand
-- Business logic inside UI components
-- API calls inside JSX files
-- Components managing unrelated state
-
-If your component fetches data, filters it, sorts it, validates it, and mutates it, that is NOT a component anymore. That's a mini-backend 😭. Move logic to: `hooks/`, `queries/`, `store/`, `utils/`.
-
----
-
-### 2. TypeScript Rules
-
-✅ **Always write like this:**
-
-```typescript
-type CategoryFormProps = {
-  onSubmit: (data: CategoryInput) => void // (or data: Category)
-}
-
-const CategoryForm = ({ onSubmit }: CategoryFormProps) => {}
-```
-
-❌ **Never use:** `const CategoryForm: React.FC<Props>`
-
-Why? React.FC adds implicit children, messes with generics (bad generic inference), breaks defaultProps typing, makes inference harder, and makes DevTools debugging messier.
-
----
-
-### 3. State Management Strategy (2026 Standard)
-
-Modern React has 4 types of state:
-
-| State Type | Example | Tool |
-|---|---|---|
-| **UI State** | modal open | Zustand |
-| **Server State** | users from DB | Tanstack Query |
-| **Form State** | login form | React Hook Form |
-| **URL State** | page=2 | React Router / nuqs |
-| **Global Auth** | — | Zustand + Persist |
-
-🔥 **GOLDEN RULE:** Server State ≠ Client State
-
-❌ **NEVER:** Store API response in Zustand, store React Query data in Redux, or duplicate backend data locally. Let React Query own server data lifecycle: caching, retries, background refetch, deduping, and stale logic. Avoid Redux unless enterprise-level scale, and avoid `useState` for shared state.
-
----
-
-### 4. Data Fetching Pattern
-
-❌ **Old Pattern:** Fetch inside `useEffect`
-
-```javascript
-useEffect(() => {
-  fetch('/api/users')
-}, [])
-```
-
-This causes: race conditions, double fetching, stale UI, no caching, bad retries, and manual loading states.
-
-✅ **New Standard:** Always use `query.ts`, `mutation.ts`, and `queryKeys.ts`. Use `useQuery()`, `useMutation()`, Query Key Factory pattern, Optimistic Updates, and Suspense Mode.
-
-```typescript
-// Example:
-export const categoryQueryKeys = {
-  all: ['categories'] as const,
-  list: () => [...categoryQueryKeys.all, 'list'] as const,
-}
-
-export const useCategories = () =>
-  useQuery({
-    queryKey: categoryQueryKeys.list(),
-    queryFn: fetchCategories,
-    staleTime: 5 * 60 * 1000
-  })
-```
-
----
-
-### 5. Folder Structure (Feature First)
-
-✅ **Use:**
-
+**Feature-based** (switch when large team / 50+ features):
 ```
 src/
   modules/
-    category/
+    user/
       components/
       hooks/
-      api/
       types/
-      category.query.ts
-      category.mutation.ts
-      category.store.ts
 ```
 
-❌ **Avoid:** Root-level `components/`, `pages/`, `utils/`, `services/`. Type-based structure doesn't scale. Feature-based = modular.
+Pick one and be consistent. Type-based is simpler to start. Only migrate to feature-based when engineers own different modules and are stepping on each other.
 
 ---
 
-### 6. Forms (Huge Source of Bugs)
+### TypeScript in React
 
-✅ **Use:** React Hook Form and Zod Resolver.
+```ts
+// ✅ Explicit prop types, no React.FC
+type UserCardProps = {
+  userId: string
+  onDelete: (id: string) => void
+}
+const UserCard = ({ userId, onDelete }: UserCardProps) => { }
+```
 
-❌ **Never:** Manage form state manually, use `useState` for inputs, or validate in `onSubmit`.
-
----
-
-### 7. Performance Rules
-
-✅ **Use:** Lazy loading for routes (with Suspense), `React.memo` only when needed, `useCallback` only for child prop stability (handlers passed down), Virtualized Lists (`react-virtual`) for large tables.
-
-❌ **Avoid:** Premature memoization (memoizing everything), inline anonymous functions/heavy computations in heavy lists/JSX, derived state stored in state.
-
-- **Bad:** `const [total, setTotal] = useState(cart.reduce(...))`
-- **Good:** `const total = useMemo(() => cart.reduce(...), [cart])`
+**Never use `React.FC<Props>`**. It adds implicit children, breaks generic component inference, and makes DevTools messier. No benefit.
 
 ---
 
-### 8. Global State (Zustand Pattern)
+### State Management
 
-Use Zustand **ONLY** for: auth state, theme, UI toggles, and local preferences.
-
-**Never:** backend data, form inputs, server responses.
-
----
-
-### 9. Error + Loading UI
-
-- **Never:** Handle loading manually everywhere.
-- **Use:** React Query Suspense and Error Boundaries.
-
----
-
-### 10. API Layer Pattern
-
-Never call `axios` inside `component.tsx`. Always use `api/category.api.ts`.
-
----
-
-### 🚨 FINAL REACT RULES CHECKLIST
-
-✔ Hooks > Classes ✔ Tanstack Query for server state ✔ Zustand for UI state ✔ React Hook Form for forms ✔ Zod for validation ✔ Feature-based folder structure ✔ API layer abstraction ✔ No fetch in useEffect ✔ No React.FC ✔ No global server state
-
----
-
-## 🟩 PART 2 — NODE.JS BACKEND ARCHITECTURE (2026 STANDARD)
-
-### 1. First Principle: Your Backend is NOT MVC
-
-Classic MVC (route → controller → model) looks nice in tutorials but becomes controllers with 300 lines, models called directly, business logic duplicated in 7 controllers, impossible testing, and tight coupling in real apps. Avoid MVC-only backend (doesn't scale well).
-
-✅ **Use This Instead:** Layered Architecture OR Domain Driven Modular Architecture. `route → controller → service → repository → database`. Each layer has ONLY ONE responsibility.
-
-| Layer | Responsibility |
+| State Type | Tool |
 |---|---|
-| **Route** | define endpoint |
-| **Controller** | HTTP handling |
-| **Service** | business logic |
-| **Repository** | DB interaction |
-| **Model** | schema only |
+| Server data (API responses) | TanStack Query |
+| Auth / current user | TanStack Query cache |
+| Form state | React Hook Form |
+| URL state | React Router params |
+| UI globals (theme, modals) | Zustand — only if needed |
 
-🚨 **Rule:** Controllers should NEVER talk to database directly. If you see `User.find()` inside controller → architecture violation.
+**Golden rule:** Don't duplicate server state into a global client store. TanStack Query owns server data — caching, deduplication, retries, background refetch. Treat its cache as a read layer.
+
+Zustand is optional. If your auth and most global state live in the query cache, you may not need Zustand at all. Add it only for real client-only global state that doesn't belong in a query.
 
 ---
 
-### 2. Project Structure (Scalable)
+### Data Fetching
 
-❌ **Avoid:** `controllers/`, `models/`, `routes/`, `services/`. This type-based structure breaks at scale.
+Always use `useQuery` and `useMutation`. Never `useEffect` + `fetch`.
 
-✅ **Use Domain-Based Structure:**
+```ts
+// Query key constants — centralize them
+export const USER_QUERY_KEY = ["current-user"] as const
 
+const { data: user, isLoading } = useQuery<User>({
+  queryKey: USER_QUERY_KEY,
+  queryFn: ({ signal }) => api.get("/auth/me", { signal }).then(r => r.data),
+  retry: false,
+})
+```
+
+**Elaborate Query Key Factory patterns** (categoryQueryKeys.list()) are useful only when you have many related queries that need coordinated invalidation. For most apps, simple constant arrays are enough.
+
+---
+
+### Styling
+
+Use TailwindCSS with a `cn()` utility for conditional classes:
+
+```ts
+// utils/cn.ts
+import { clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
+export default function cn(...inputs: Parameters<typeof clsx>) {
+  return twMerge(clsx(inputs))
+}
+```
+
+Vanilla CSS is fine for small projects. Tailwind wins at team scale — no naming battles, no dead CSS, utility classes are self-documenting.
+
+---
+
+### Forms
+
+Always use React Hook Form + Zod resolver:
+
+```ts
+const schema = z.object({ email: z.string().email(), password: z.string().min(8) })
+const { register, handleSubmit } = useForm({ resolver: zodResolver(schema) })
+```
+
+Never manage form state via `useState` per field. Never validate manually in `onSubmit`.
+
+---
+
+### Performance — Be Pragmatic
+
+- Lazy load routes — always
+- `React.memo` — only after profiling confirms unnecessary re-renders
+- `useCallback` — only to stabilize callback references passed to memoized children
+- `useMemo` — for genuinely expensive computations, not "just in case"
+- Virtualization — add when lists exceed ~200 items
+
+Premature memoization adds noise without benefit. Profile before optimizing.
+
+---
+
+### React Checklist
+
+- [ ] Functional components only, no `React.FC`
+- [ ] TanStack Query for all server state
+- [ ] React Hook Form + Zod for all forms
+- [ ] Centralized axios/fetch instance
+- [ ] No `useEffect` for data fetching
+- [ ] No `useState` for server data
+- [ ] `cn()` utility for conditional Tailwind classes
+- [ ] Zustand only when genuinely needed for client-only global state
+
+---
+
+## PART 2 — NODE.JS BACKEND
+
+### Architecture: Right-Size Your Layers
+
+The full layered architecture (Controller → Service → Repository → DB) is often recommended but adds boilerplate that only pays off at scale. Choose based on where you are:
+
+**Thin controllers** (startup to mid-size):
+```
+Route → Middleware → Controller → Model → DB
+```
+Controllers validate input, call the ORM directly, return response. Works well when controllers are focused and ~20–50 lines.
+
+**Service layer** (extract when needed):
+```
+Route → Middleware → Controller → Service → Model → DB
+```
+Extract a service when: business logic is shared across multiple controllers, complex multi-step operations need isolated testing, or you're running payment/financial workflows.
+
+**Repository layer** (rarely necessary): Add only if you need to swap databases or heavily mock DB calls in unit tests. Most MERN apps don't swap databases.
+
+> A 3-layer architecture on a 5-controller CRUD app is over-engineering. Add layers as the codebase earns them.
+
+---
+
+### Folder Structure
+
+**Type-based** (simple, small-medium apps):
+```
+src/
+  controllers/
+    auth/
+      Login.ts
+      Logout.ts
+    user/
+      GetUser.ts
+  routes/
+    auth.routes.ts
+    user.routes.ts
+  models/
+    User.model.ts
+  middlewares/
+  configs/
+  shared/      ← email, s3, token utilities
+  jobs/        ← background jobs
+  utils/
+```
+
+**Domain-based** (large team / many features):
 ```
 src/
   modules/
@@ -217,630 +215,554 @@ src/
       user.route.ts
       user.controller.ts
       user.service.ts
-      user.repository.ts
       user.schema.ts
-      user.dto.ts
 ```
-
-Everything related to "user" lives in one module. Now: features are isolated, testing becomes easy, onboarding is faster, and less merge conflicts.
-
+The domain-based structure is superior for cross-team ownership but adds overhead when one engineer owns the whole backend.
 ---
 
-### 3. Controller Rules
+### Request Validation: Zod + Middleware
 
-Controllers are the translation layer between HTTP world and business world.
+Validate in the route layer, before the controller ever runs:
 
-✅ **Controller SHOULD:** Validate input, Call service, Return response.
-
-❌ **Controller SHOULD NOT:** Query DB, Run business logic, Transform domain logic, Call external APIs, Perform calculations.
-
-- **Bad:** `const user = await User.findById(id); user.balance += 200; await user.save()`
-- **Good:** `await userService.addBalance(id, 200)`
-
----
-
-### 4. Service Layer (Your Real Backend)
-
-Service Layer contains: business rules, workflows, calculations, multi-db operations, external integrations.
-
-Example: `await walletService.transferMoney(sender, receiver, amount)`. Inside: validate balance, debit, credit, transaction logging, rollback logic. None of this belongs in controller.
-
----
-
-### 5. Repository Layer (DB Abstraction)
-
-Service should NOT care if you are using Mongo, Postgres, Redis, or Firestore. Repository handles DB.
-
-Example: `userService → userRepository → mongoose`. Now: You can replace Mongo later without rewriting business logic.
-
----
-
-### 6. Async Handling Pattern
-
-❌ **Avoid:** Nested awaits or blocking operations (sync fs, crypto).
-
-✅ **Use:** async/await everywhere.
-
-```javascript
-// Promise.all for parallel tasks
-await Promise.all([
-  save(),
-  sendMail(),
-  log()
-])
-```
-
-Parallel execution = faster APIs.
-
----
-
-### 7. Error Handling System
-
-**Never:** throw raw strings, send stack traces to client, or write try/catch in every controller.
-
-✅ **Create Custom Error Class and Global Middleware:**
-
-```javascript
-class AppError extends Error {
-  constructor(message, statusCode) {
-    super(message)
-    this.statusCode = statusCode
+```ts
+// validateMiddleware.ts
+function validate(schema: ZodSchema) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      schema.parse({ body: req.body, query: req.query, params: req.params })
+      next()
+    } catch (err) {
+      next(err) // ZodError handled by global error middleware
+    }
   }
 }
 
-// Controller:
-next(new AppError('User not found', 404))
-```
-
-Use Error Codes (not only messages).
-
----
-
-### 8. DTO Pattern (MANDATORY)
-
-Never trust `req.body`. Use DTOs (e.g., `createUser.dto.ts`) to ensure validation, shape consistency, type safety, and prevent overposting attacks.
-
-```typescript
-// Controller:
-const dto = createUserSchema.parse(req.body)
-await userService.create(dto)
-```
-
-Use Zod; avoid manual validation.
-
----
-
-### 9. Logging Strategy
-
-Never use `console.log()` in production. Use Pino (fastest) for structured JSON logs.
-
-```json
-{
-  "level": "info",
-  "service": "auth",
-  "userId": "123"
-}
-```
-
-Logs should track: `requestId`, `userId`, `module`, `latency`.
-
----
-
-### 10. Background Jobs (Don't Block APIs)
-
-Never `await sendEmail()` inside a signup API. The user should not wait for the email service.
-
-Use BullMQ, Worker Threads, or Message Queue. Flow: `signup → queue email job → API returns immediately`.
-
----
-
-### 11. Dependency Injection (Important)
-
-Avoid `import userRepository` inside service directly.
-
-Instead, inject dependency: `new UserService(userRepository)`. Now it is testable, replaceable, and loosely coupled.
-
----
-
-### 12. Config Management
-
-Never use `process.env.JWT_SECRET` everywhere inside 25 files. Use `config/env.ts` and `config/db.ts` to export validated config once.
-
----
-
-### 🚨 FINAL NODE RULES CHECKLIST
-
-✔ Domain-based modules ✔ Controller thin ✔ Service = business logic ✔ Repository = DB access ✔ DTO validation ✔ Custom Error System ✔ Global Error Middleware ✔ Structured logging ✔ Background jobs for async tasks ✔ Promise.all for parallel work ✔ Dependency Injection ✔ Central config management
-
----
-
-## 🟨 PART 3 — EXPRESS API LAYER (2026 STANDARD)
-
-Express is NOT your backend logic. Express is your **Transport Layer**.
-
-It should only: receive request, validate, authenticate, pass to controller, send response. Nothing else.
-
----
-
-### 1. Request Lifecycle (MANDATORY FLOW)
-
-Every API request should follow:
-
-```
-Request
-  ↓ Global Middleware
-  ↓ Auth Middleware
-  ↓ Validation Middleware
-  ↓ Controller
-  ↓ Service
-  ↓ Repository
-  ↓ DB
-  ↓ Response Formatter
-```
-
-If this flow breaks → codebase becomes unpredictable.
-
----
-
-### 2. Route Design Pattern
-
-❌ **Never:** Put logic in routes, DB calls inside controller, or business logic inside route.
-
-- **Bad:** `router.post('/user', async (req,res)=>{ const user = await User.create(req.body) })`
-
-✅ **Routes Should Only:** Map endpoint → middleware → controller.
-
-```javascript
-router.post(
-  '/',
-  validate(createUserSchema),
-  authMiddleware,
-  userController.createUser
+// auth.routes.ts
+router.post("/login",
+  validate(z.object({
+    body: z.object({ email: z.string().email(), password: z.string().min(8) })
+  })),
+  loginController,
 )
 ```
 
-Routes = traffic police 🚦 They just direct the request. Controllers validate input, call service, return response. Services handle business logic and DB calls.
+Separate DTO files are useful when the same schema is reused across multiple routes. For single-use schemas, inline Zod is cleaner.
 
 ---
 
-### 3. Middleware Layering
+### Error Handling
 
-Your Express app should have 3 middleware types:
+Global error middleware handles everything. No try/catch duplication:
 
-| Type | Purpose |
-|---|---|
-| **Global** | CORS, Helmet |
-| **Route** | Auth |
-| **Feature** | Validation |
-
-- **App Level:** `app.use(cors()); app.use(helmet()); app.use(requestLogger)`
-- **Route Level:** `router.use(authMiddleware)`
-- **Feature Level:** `router.post('/', validate(schema), controller)`
-
----
-
-### 4. Validation Flow
-
-Never check manual `req.body` in controllers (e.g., `if(!req.body.email)`).
-
-✅ **Use:** Zod / Joi and Celebrate middleware.
-
-```javascript
-export const validate =
-  (schema) =>
-  (req, res, next) => {
-    schema.parse(req.body)
-    next()
-  }
+```ts
+// errorMiddleware.ts — must be last in Express chain
+const errorMiddleware = (err: unknown, req: Request, res: Response, _: NextFunction) => {
+  if (err instanceof ZodError) { res.status(400).json({ success: false, message: err.errors[0]?.message }); return }
+  if (err instanceof Error) { res.status(500).json({ success: false, message: "Internal server error" }); return }
+  if (typeof err === "string") { res.status(400).json({ success: false, message: err }); return }
+  res.status(500).json({ success: false, message: "Something went wrong" })
+}
+app.use(errorMiddleware)
 ```
 
-Now controller only receives valid data.
+Custom `AppError` class is worth adding when you have a service layer needing domain-specific errors with status codes. Without a service layer, it's mostly ceremony.
 
 ---
 
-### 5. Auth Middleware Pattern
+### Logging
 
-Never decode JWT inside controller (e.g., `jwt.verify()`).
+Never `console.log` in production. Use **Winston** (reliable, battle-tested) or **Pino** (fastest).
 
-✅ **Create:** `auth.middleware.ts`. Attach user to request: `req.user = decodedUser`. Now downstream layers use: `req.user.id`. Clean separation.
+```ts
+logger.info("User created", { userId, email })
+logger.error("Payment failed", { error, userId, amount })
+logger.http(`${req.method} ${req.url} ${res.statusCode} ${latency}ms`)
+```
+
+**Log:** request method/url/status, user ID, latency, error stacks.
+**Never log:** passwords, tokens, PII in plaintext.
 
 ---
 
-### 6. Response Formatter (VERY IMPORTANT)
+### Background Jobs
 
-Avoid: `res.json(user)`, `res.send(data)`, `res.status(200).json()` — Different devs = different response shapes 😭
+**Cron jobs** (`node-cron` or `cron`) are sufficient for: periodic reports, notifications, currency rate syncs, cleanup tasks.
 
-✅ **Create:** `response.util.ts`. Example: `res.success(data)`, `res.error(message)`.
+```ts
+new CronJob("0 9 * * *", notifyFinanceTeam).start()
+```
 
-Now every API response becomes predictable frontend handling:
+**BullMQ + Redis** is worth adding when you need: job queuing with retries and dead letter queues, distributed workers, job priority/rate limiting, or real-time progress tracking.
+
+Don't start with BullMQ. Upgrade to it when cron limitations become real problems.
+
+---
+
+### Config Management
+
+Single config module. Never scatter `process.env` throughout the codebase:
+
+```ts
+// config.ts — validate and export once
+const config = {
+  MONGO_URI: process.env.MONGO_URI!,
+  JWT_SECRET: process.env.JWT_SECRET!,
+  PORT: process.env.PORT || 8888,
+  AWS: {
+    BUCKET: process.env.AWS_BUCKET_NAME!,
+    REGION: process.env.AWS_REGION!,
+  },
+}
+export default config
+```
+
+---
+
+### Node Checklist
+
+- [ ] Right-sized architecture (add layers only when needed)
+- [ ] Zod validation middleware — no raw `req.body` in controllers
+- [ ] Global error middleware (last in Express chain)
+- [ ] Structured logger (Winston or Pino) — no `console.log`
+- [ ] `Promise.all` for parallel async operations
+- [ ] Cron for periodic jobs; BullMQ only when genuinely needed
+- [ ] Centralized config module
+- [ ] API versioning (`/api/v1`)
+
+---
+
+## PART 3 — EXPRESS API LAYER
+
+### Request Lifecycle
+
+Every request should follow this chain:
+```
+Request
+  ↓ Global middleware (cors, json, cookieParser)
+  ↓ Request logger (method, url, latency)
+  ↓ Auth middleware
+  ↓ Validation middleware (Zod)
+  ↓ Controller
+  ↓ Model / Service
+  ↓ Response
+  ↓ Error middleware (if next(err) called)
+```
+
+Break this chain → the codebase becomes unpredictable.
+
+---
+
+### Routes = Traffic Police
+
+Routes only: define endpoints, attach middleware, call controller.
+
+```ts
+// ✅ Clean route
+router.post("/users",
+  authMiddleware,
+  validate(createUserSchema),
+  userController.create,
+)
+
+// ❌ Never this
+router.post("/users", async (req, res) => {
+  const user = await User.create(req.body) // validation? auth? error handling? 🫠
+  res.json(user)
+})
+```
+
+---
+
+### Auth Middleware
+
+```ts
+const { payload } = await jwtVerify(token, secret) // use jose, not jsonwebtoken
+req.user = payload
+next()
+```
+
+Prefer **jose** over `jsonwebtoken` — ES module native, actively maintained, better TypeScript types.
+
+Use **HttpOnly cookies** for JWT (not localStorage). Pair with short-lived access tokens + long-lived refresh tokens.
+
+---
+
+### Response Shape — Be Consistent
+
+Pick a shape and stick to it across every endpoint:
 
 ```json
+{ "success": true, "data": { } }
+{ "success": false, "message": "...", "status": 400 }
+```
+Inconsistent response shapes are a common pain point for frontend teams. A simple response utility function eliminates this:
+
+```ts
+// responseUtil.ts
+export const ok = (res: Response, data: unknown) => res.json({ success: true, data })
+export const fail = (res: Response, message: string, status = 400) =>
+  res.status(status).json({ success: false, message })
+```
+
+---
+
+### Security (Non-Negotiable)
+
+```ts
+app.use(helmet())                          // HTTP security headers
+app.use(cors({ origin: whitelist, credentials: true }))
+app.use(mongoSanitize())                   // prevent NoSQL injection
+router.post("/login", loginLimiter, controller) // rate limit auth routes
+```
+
+Bcrypt with salt rounds ≥ 12. Never store secrets in code.
+
+---
+
+### API Versioning
+
+Always prefix routes: `/api/v1/resource`. Non-negotiable from day one. Without it: breaking changes crash mobile apps, third-party clients, and integrated systems.
+
+---
+
+### Express Checklist
+
+- [ ] Routes only define endpoints + middleware chain
+- [ ] Zod validation middleware
+- [ ] Auth middleware (jose JWT, HttpOnly cookies)
+- [ ] API versioning from day one
+- [ ] Global error middleware
+- [ ] Consistent response shape
+- [ ] Helmet + CORS + mongo-sanitize
+- [ ] Rate limiting on auth endpoints
+
+---
+
+## PART 4 — MONGODB + MONGOOSE
+
+### Use InferSchemaType for TypeScript Types
+
+Don't write separate interfaces for Mongoose models. Let the schema be the source of truth:
+
+```ts
+const userSchema = new mongoose.Schema({
+  email: { type: String, unique: true, lowercase: true, required: true },
+  permissions: { type: [String], default: [] },
+}, { timestamps: true, minimize: true })
+
+export type User = InferSchemaType<typeof userSchema>
+export default mongoose.model<User>("user", userSchema)
+```
+
+This keeps types automatically in sync with schema. No drift.
+
+---
+
+### Schema Options (Always)
+
+```ts
 {
-  "success": true,
-  "data": {}
+  timestamps: true,    // createdAt + updatedAt always
+  minimize: true,      // strip empty objects (saves storage)
 }
 ```
 
 ---
 
-### 7. API Versioning
+### Indexes
 
-Never use `/api/users`. Use `/api/v1/users`. Later: `/api/v2/users`. Avoids breaking mobile apps, old clients, and frontend crashes.
+Index every field you query or sort by:
 
----
+```ts
+companyId: { type: ObjectId, index: true }    // foreign keys
+email:     { type: String,   unique: true }    // unique constraint = index
+status:    { type: String,   index: true }     // frequently filtered
 
-### 8. Rate Limiting & Security (Production Mandatory)
+// Compound index for pagination and dashboard queries
+userSchema.index({ companyId: 1, createdAt: -1 })
+```
 
-Use Helmet, CORS config, JWT Rotation, Bcrypt with salt rounds ≥ 10, and `express-rate-limit`. Avoid storing secrets in code or sending stack traces to client.
-
-Protect: login, OTP, public endpoints. Example: Attach `loginLimiter` → `router.post('/login', loginLimiter, controller)`.
-
----
-
-### 9. Centralized Error Handling
-
-Never use `res.status(500)` inside controller.
-
-- **Controller:** `next(new AppError('Not found', 404))`
-- **Global Middleware:** `error.middleware.ts` handles formatting, status code, logging.
+Don't over-index. Each index increases write time and uses RAM. Only index fields that appear in `find()`, `sort()`, or aggregation `$match`.
 
 ---
 
-### 10. Async Wrapper
+### Aggregation Over `populate()`
 
-Avoid try/catch everywhere. Use `asyncHandler(controller)` to wrap controller once for a cleaner codebase.
+`.populate()` is a hidden N+1 query. Avoid it for list endpoints. Use aggregation:
 
----
+```ts
+UserModel.aggregate([
+  { $match: { companyId: id } },            // filter first — always
+  { $project: { name: 1, email: 1 } },      // reduce payload early
+  { $lookup: { from: "companies", localField: "companyId", foreignField: "_id", as: "company" } },
+  { $addFields: { company: { $arrayElemAt: ["$company", 0] } } },
+])
+```
 
-### 11. Request Logging
-
-Track: `requestId`, `userId`, `route`, `latency`. Attach requestId: `req.id = uuid()`. Now logs become traceable in production.
-
----
-
-### 12. Route Protection Strategy
-
-| Route Type | Middleware |
-|---|---|
-| **Public** | none |
-| **Private** | auth |
-| **Admin** | auth + role |
-
-Example: `authorize('admin')`.
+`populate()` is acceptable on detail/single-document pages where N+1 is just 1 extra query.
 
 ---
 
-### 🚨 FINAL EXPRESS RULES CHECKLIST
+### `lean()` for Read Endpoints
 
-✔ No logic in routes ✔ Validation middleware ✔ Auth middleware ✔ Versioned APIs ✔ Global error handler ✔ Async wrapper ✔ Response formatter ✔ Request logging ✔ Rate limiting ✔ Role-based route protection
+```ts
+// ✅ 30–50% faster, returns plain JSON (not Mongoose Document instances)
+const users = await UserModel.find({ companyId }).lean()
+```
 
----
-
-## 🟥 PART 4 — MONGODB + MONGOOSE (2026 STANDARD)
-
-### 1. Golden Rule of MongoDB
-
-MongoDB is a **Query-first** database. Not relation-first, normalization-first, or table-first. You design based on: **How the data will be read most frequently.**
+Skip `lean()` only when you need to call `.save()`, use virtuals, or trigger Mongoose middleware.
 
 ---
 
-### 2. Embed vs Reference (MOST IMPORTANT DECISION)
+### `Promise.all` for Parallel Operations
 
-✅ **EMBED WHEN:**
-- One-to-Few relationship, frequently read together, data size is small, data rarely updated separately.
-- Examples: user → addresses, product → tags, order → shipping status.
+```ts
+// ✅ Parallel — total time = slowest operation
+await Promise.all([save(), sendEmail(), logActivity()])
 
-✅ **REFERENCE WHEN:**
-- One-to-Many relationship, data grows over time, frequently updated independently, used across collections.
-- Examples: user → orders, product → reviews, course → students.
-
-🚨 **Avoid:** Unbounded arrays (e.g., `comments: []`). This can break Mongo's 16MB document limit later.
-
----
-
-### 3. Hybrid Pattern (Production Standard)
-
-Use Hybrid when needed. Embed frequently read fields, reference heavy dynamic data.
-
-Example `order`: `userId`, `total`, `itemsSummary` (embedded), `itemsRef` (referenced). Fast reads + scalable writes.
-
----
-
-### 4. Must Use Schema Options
-
-Always use `timestamps: true` and `versionKey: false`. Also use `toJSON: { virtuals: true }` and `toObject: { virtuals: true }` — needed for computed fields.
-
----
-
-### 5. Index Strategy (NON-NEGOTIABLE)
-
-If your query filters → it needs an index. Avoid `find()` without index.
-
-- **Index:** email, status, createdAt, foreign keys, sort fields.
-- **Compound Indexes:** `userId + createdAt` needed for pagination and dashboard queries.
-
-🚨 **Avoid:** Indexing everything. Each index increases write time and consumes memory.
-
----
-
-### 6. Query Optimization: Use lean() for Read APIs
-
-Normal Mongoose returns heavy document instances. You don't need that for APIs.
-
-Always use `.lean()` for reads (e.g., `User.find().lean()`). Lean is 30–50% faster, uses lower memory, and returns plain JSON.
-
-Avoid lean when: using virtuals, using middleware, or modifying document.
-
----
-
-### 7. Pagination Pattern
-
-Never use `skip(50000)` — Mongo will scan 50k docs first 😭
-
-Use **Cursor Pagination** based on `createdAt` or `_id`.
-
-```javascript
-// Pattern: Scales infinitely.
-find({ createdAt: { $lt: lastSeen } })
-  .limit(10)
-  .sort({ createdAt: -1 })
+// ❌ Sequential — total time = sum of all
+await save()
+await sendEmail()
+await logActivity()
 ```
 
 ---
 
-### 8. Aggregation Pipeline Rules
+### Pagination
 
-Aggregation is Mongo's SQL JOIN + GROUP BY equivalent.
+**Offset pagination** (`skip()`) — fine for small datasets:
+```ts
+Model.find({}).skip(page * limit).limit(limit)
+```
 
-Always:
-1. Use `$match` first / early.
-2. Use `$project` early to reduce payload.
-3. Use indexed fields.
-4. Use `$facet` for dashboards / analytics.
-5. Use `$lookup` only when necessary / sparingly.
+**Cursor pagination** — use when data grows large:
+```ts
+Model.find({ createdAt: { $lt: lastSeen } }).limit(10).sort({ createdAt: -1 })
+```
 
-🚨 **Avoid:** Aggregation without index support or pipeline before filtering (`$lookup → $match` explodes memory usage).
-
----
-
-### 9. populate() Usage
-
-Never use `.populate('orders')` for lists (Populate = hidden join). Use aggregation or manual join for large datasets. Populate okay only for detail pages.
+Cursor pagination scales infinitely. `skip(50000)` makes Mongo scan 50k documents first.
 
 ---
 
-### 10. Soft Delete Pattern
+### Soft Delete
 
-Never use `User.deleteOne()`. Avoid hard deletes in production apps.
+Never hard-delete user-facing data in production:
 
-Use `deletedAt: Date | null`. Query: `{ deletedAt: null }`.
+```ts
+// Schema
+deletedAt: { type: Date, default: null }
 
----
-
-### 11. Virtual Fields
-
-Use for `fullName`, computed totals, derived stats. Example: `userSchema.virtual('fullName')`. No DB storage needed.
-
----
-
-### 12. Projection (Huge Performance Gain)
-
-Never use `User.find()` blindly. Use `.select('name email')` for less payload → faster APIs.
+// All queries include:
+Model.find({ deletedAt: null })
+```
 
 ---
 
-### 13. Pre/Post Middleware
+### Transactions
 
-Use for hashing password, audit logs, timestamps, cascading soft delete. Avoid heavy logic inside middleware.
+Use sessions for multi-document operations that must be atomic:
 
----
+```ts
+const session = await mongoose.startSession()
+session.startTransaction()
+// debit + credit + log — all or nothing
+await session.commitTransaction()
+```
 
-### 14. Transaction Usage
-
-Use for payments, wallet updates, inventory deduction with `session.startTransaction()`. Never rely on Mongo atomicity for multi-document ops.
-
----
-
-### 🚨 FINAL MONGOOSE RULES CHECKLIST
-
-✔ Embed small related data ✔ Reference growing data ✔ Hybrid for balance ✔ Always index query fields ✔ Use lean() for reads ✔ Cursor pagination ✔ Match early in aggregation ✔ Avoid populate for lists ✔ Use soft delete ✔ Use projections ✔ Use transactions for multi-doc ops ✔ Virtuals for computed data
+Required for: payments, wallet transfers, inventory deductions. Don't rely on document atomicity for operations spanning multiple collections.
 
 ---
 
-## 🟪 PART 5 — TYPESCRIPT ENGINEERING GUIDELINES (2026)
+### Mongoose Checklist
 
-### 1. tsconfig.json (MANDATORY BASELINE)
+- [ ] `InferSchemaType` for model types
+- [ ] `timestamps: true` and `minimize: true` on every schema
+- [ ] Index foreign keys and filtered/sorted fields
+- [ ] Aggregation pipeline for joins (not `populate()` on lists)
+- [ ] `lean()` on all read-only endpoints
+- [ ] `Promise.all` for independent DB operations
+- [ ] Soft delete (`deletedAt`) for user-facing data
+- [ ] Transactions for multi-document atomic operations
+- [ ] `$match` as early as possible in every aggregation
 
-If this is not strict → your whole type safety is fake.
+---
 
-✅ **Must Enable:**
+## PART 5 — TYPESCRIPT
+
+### tsconfig Baseline
 
 ```json
 {
   "compilerOptions": {
     "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "strictFunctionTypes": true,
-    "strictBindCallApply": true,
-    "strictPropertyInitialization": true,
-    "noImplicitThis": true,
-    "alwaysStrict": true,
-    "isolatedModules": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "moduleResolution": "bundler"
   }
 }
 ```
 
----
-
-### 2. Type Inference Philosophy
-
-❌ **Avoid:** `const name: string = "Abhishek"` (Redundant).
-
-✅ **Use:** `const name = "Abhishek"` (Let TS infer internally).
-
-🚨 **Exception:** Always type function parameters, public API responses, DTOs, service returns.
+- `strict: true` is non-negotiable. Without it, TypeScript gives false confidence.
+- `verbatimModuleSyntax: true` enforces `import type` for type-only imports, preventing runtime bundle pollution.
 
 ---
 
-### 3. Interfaces vs Types (Production Rule)
+### Inference Over Annotation
 
-- **Use `interface` when:** defining object shapes, extendable domain models, class contracts.
+```ts
+// ❌ Redundant annotation
+const name: string = "John"
 
-```typescript
-interface User { id: string; email: string }
+// ✅ Inferred
+const name = "John"
+const items: string[] = []  // annotation useful here — empty array needs a hint
 ```
 
-- **Use `type` when:** unions, tuples, mapped types, utility composition.
+Always annotate: function parameters, exported interfaces, API return types, DTO shapes.
 
-```typescript
-type Role = 'admin' | 'user'
+---
+
+### `interface` vs `type`
+
+```ts
+// interface — object shapes, extendable domain models
+interface User { _id: string; email: string; permissions: string[] }
+
+// type — unions, tuples, mapped types, utility composition
+type Role = "admin" | "user" | "viewer"
+type UserOrNull = User | null
 ```
 
 ---
 
-### 4. Never Use `any`
+### Never `any` — Use `unknown`
 
-❌ **Bad:** `function process(data: any)` — Removes autocomplete, compile checks, runtime safety.
+```ts
+// ❌ Kills all type safety downstream
+function process(data: any) { }
 
-✅ **Use:** `unknown` and narrow later.
-
-```typescript
-function parse(data: unknown) {
-  if (typeof data === "string") {
-    return data.toUpperCase()
-  }
+// ✅ Safe, narrow before use
+function process(data: unknown) {
+  if (typeof data === "string") return data.toUpperCase()
 }
 ```
 
 ---
 
-### 5. DTO Pattern (Full Stack Safety)
+### `import type` is Required
 
-Backend should NEVER accept `req.body` directly. Use DTO validation via Zod.
+With `verbatimModuleSyntax: true`, type-only imports must use `import type`:
 
-```typescript
-// createUser.dto.ts
-export interface CreateUserDTO {
-  email: string
-  password: string
-}
+```ts
+import type { Request, Response, NextFunction } from "express"
+import type { User } from "@/models/User.model"
+```
+This is enforced at compile time and prevents types from bleeding into the runtime bundle.
+---
+
+### Path Aliases
+
+Configure `@/*` to map to `./src/*` in both `tsconfig.json` and your bundler:
+
+```ts
+// Instead of:
+import config from "../../../configs/config"
+// Use:
+import config from "@/configs/config"
 ```
 
-Now: controller safe, service safe, DB safe. Prevents overposting attack (User sending `admin: true` manually).
-
 ---
 
-### 6. Async API Pattern
+### Null Safety
 
-Always type API responses.
+```ts
+// ❌ Runtime crash waiting to happen
+user.name.length
 
-❌ **Bad:** `async function getUser()`
-
-✅ **Good:** `async function getUser(): Promise<User>`
-
-Frontend: `useQuery<User>()`. Full stack type sync achieved.
-
----
-
-### 7. Generics for Reusability
-
-Use in repositories, API clients, services.
-
-```typescript
-async function fetchData<T>(url: string): Promise<T>
+// ✅ Safe access
+user?.name?.length ?? 0
 ```
 
-Now reusable across users, orders, products.
+With `strictNullChecks` (part of `strict: true`), TypeScript catches most of these at compile time.
 
 ---
 
-### 8. Type-Only Imports (Performance)
+### Generic Utilities
 
-- **Avoid:** `import { User } from './types'`
-- **Use:** `import type { User } from './types'` — Prevents runtime bundle pollution.
-
----
-
-### 9. const Assertions (Union Safety)
-
-```typescript
-const ROLES = ['admin', 'user'] as const
-type Role = typeof ROLES[number]
-```
-
-Strongest possible union.
-
----
-
-### 10. Type Guards
-
-Needed for external APIs, unknown input, JSON parsing.
-
-```typescript
-function isUser(value: unknown): value is User {
-  return typeof value === 'object'
+```ts
+// Reusable across users, orders, products
+async function fetchData<T>(url: string): Promise<T> {
+  const res = await api.get(url)
+  return res.data
 }
 ```
 
 ---
 
-### 11. Null Handling (Huge Runtime Crash Source)
+### TypeScript Checklist
 
-- **Never:** `user.name.length`
-- **Use:** `user?.name ?? "Anonymous"`
+- [ ] `strict: true` always
+- [ ] `verbatimModuleSyntax: true` → enforce `import type`
+- [ ] `noUncheckedIndexedAccess` — safe array/object access
+- [ ] Path aliases configured (`@/*`)
+- [ ] `interface` for object shapes, `type` for unions
+- [ ] `InferSchemaType` for Mongoose model types
+- [ ] No `any` — use `unknown` + narrowing
+- [ ] Always annotate function parameters and public API types
+- [ ] Optional chaining + nullish coalescing for null safety
 
 ---
 
-### 12. Avoid Deep Type Magic
+## CROSS-STACK STANDARDS
 
-❌ **Avoid:** Recursive mapped types everywhere. Slows IDE, build time, compile time.
+### Dev Tooling (Non-Negotiable)
 
-✅ **Prefer:** `Partial<User>`, `Pick<User, 'id'>`, `Readonly<User>`.
+| Tool | Purpose |
+|---|---|
+| ESLint | Catch bugs and enforce patterns |
+| Prettier | Formatting (no style debates) |
+| Husky | Git hooks |
+| lint-staged | Only lint/format changed files |
+| commitlint | Enforce conventional commits (`feat:`, `fix:`) |
+| TypeScript strict | Type safety |
+
+Run Prettier and ESLint on every commit via Husky. No exceptions.
 
 ---
 
-### 13. Dependency Injection Friendly Types
+### Auth Pattern
 
-```typescript
-interface PaymentGateway {
-  charge(amount: number): Promise<boolean>
-}
+```
+Login (OAuth2/OIDC or username+password)
+  → Issue Access Token (short-lived, jose JWT) + Refresh Token (long-lived)
+  → Set HttpOnly cookies (__Secure- prefix in production)
+
+Per request:
+  → Auth middleware reads cookie-first, Authorization header as fallback
+  → Verify with jose jwtVerify
+  → Attach req.user
+
+Token refresh:
+  → POST /auth/refresh → issue new access token
 ```
 
-Service depends on interface — not implementation. Testable architecture achieved.
+Use **jose** (not `jsonwebtoken`) — native ES modules, better TypeScript support, actively maintained.
 
 ---
 
-### 14. Folder Structure for Types
+### What's Worth Adding vs. What's Often Over-Engineered
 
-Never use a generic `types.ts`. Use domain based typing:
-
-```
-user/user.types.ts
-user/user.dto.ts
-```
-
----
-
-### 15. Testing Types
-
-Use `@ts-expect-error` to test invalid cases.
-
----
-
-### 🚨 FINAL TYPESCRIPT RULES CHECKLIST
-
-✔ Strict mode enabled ✔ Inference > explicit types ✔ Interface for models ✔ Type for unions ✔ No any ✔ unknown for external data ✔ DTO validation ✔ Typed async returns ✔ Generic APIs ✔ type-only imports ✔ const assertions ✔ Type guards ✔ Safe null handling ✔ Domain based typing ✔ Avoid deep mapped types
-
----
-
-## ⚙️ CROSS-STACK BEST PRACTICES
-
-- **API:** Use REST naming consistency, Pagination, DTO Pattern.
-- **Caching:** Use React Query cache, Redis for backend caching.
-- **Auth Flow:** Use Access Token (short-lived), Refresh Token (long-lived), HTTPOnly cookies.
-- **Testing:** Use Vitest (frontend), Jest (backend), Supertest (API).
-- **Dev Tooling:** Use ESLint, Prettier, Husky, Lint-staged.
+| Practice | Add When | Skip If |
+|---|---|---|
+| Service layer | Business logic shared across 3+ controllers | Simple CRUD, single-owner backend |
+| Repository layer | Swapping databases, heavy unit testing | Mongo-only app, no test mocking needed |
+| BullMQ job queues | Multi-worker, retries, rate limiting needed | Periodic jobs → use cron instead |
+| DI framework | Enterprise scale, 10+ services | Most MERN startups |
+| Feature-based folders | 50+ features, multi-team ownership | Small team, single codebase owner |
+| Zustand | Real client-only global state needed | Query cache covers auth + server state |
+| Redis caching | High-traffic read-heavy endpoints | API response times already acceptable |
+| Cursor pagination | Lists grow beyond thousands of records | Small datasets with offset pagination |
+| Virtualized lists | Lists exceed 200+ visible items | Normal-size data tables |
+| Custom AppError class | Service layer throwing domain errors | Thin controllers with no service layer |

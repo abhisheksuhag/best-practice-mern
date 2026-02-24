@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "mern": {
+      "source": "abhisheksuhag/best-practice-mern",
+      "sourceType": "github",
+      "computedHash": "f7ad5bf36a1be88db42db526c980da11e953bda7c513ec4758239b157fdc689e"
+    }
+  }
+}
